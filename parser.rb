@@ -2,7 +2,6 @@
 
 require 'nokogiri'
 require 'active_record'
-require 'activerecord-import' # https://github.com/zdennis/activerecord-import
 
 ITEM_ATTRIBUTES = %w(title)
 
@@ -20,12 +19,12 @@ class YandexMarket < Nokogiri::XML::SAX::Document
   attr_reader :in_stock
   
   def initialize
-    @in_stock = []
+    @items = []
   end
   
   def start_element name, attrs
     attrs = Hash[attrs.flatten]
-    if name == 'item' && attrs['available']
+    if name == 'item'
       attrs[:partner_item_id] = attrs[:id]
       attrs.delete(:id)
       @item = attrs
@@ -36,7 +35,7 @@ class YandexMarket < Nokogiri::XML::SAX::Document
   
   def end_element name
     if name == 'item'
-      @in_stock.push @item
+      @items.push @item
     end
   end
   
@@ -57,18 +56,14 @@ class StockParser
   end
   
   def import
-    @parse.in_stock.map do |attrs|
+    items = @parse.items.map do |attrs|
       attrs[:partner_id] = @partner_id
       attrs[:available_in_store] = true
-      Item.new(attrs)
     end
-    Item.import @items, :on_duplicate_key_update => ITEM_ATTRIBUTES 
-    # обновляем запись, если встретили дубликат ключа partner_item_id
+    Item.import items
   end
 end
 
 # Инициализация
 StockParser.new(xml_type: 'YandexMarket', xml_url: './file.xml', id: 14)
-
-
-
+StockParser.parse
